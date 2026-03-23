@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 
+const GEMINI_API_KEY = "AIzaSyD-h-AK5Ldl4l4sGna806mhW0woVDiwS0s";
+
 const App = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [input, setInput] = useState('');
@@ -42,7 +44,7 @@ const App = () => {
     setGeminiResponse({ text: '', loading: true });
     
     const matched = scanThreats(input);
-    const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+    //const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
 
     // 로그 기록
     if (matched.length > 0) {
