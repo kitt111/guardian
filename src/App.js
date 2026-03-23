@@ -1,125 +1,180 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-const GuardianLanding = () => {
+const App = () => {
+  const [isAdmin, setIsAdmin] = useState(false); // 관리자 모드 전환 상태
   const [input, setInput] = useState('');
   const [geminiResponse, setGeminiResponse] = useState({ text: '', loading: false });
   const [guardianLog, setGuardianLog] = useState({ text: '', loading: false });
 
-  // Gemini API 키 (Vercel 환경변수: REACT_APP_GEMINI_API_KEY)
-  const GEMINI_API_KEY = process.env.AIzaSyD-h-AK5Ldl4l4sGna806mhW0woVDiwS0s;
+  // --- 관리자 데이터 상태 ---
+  const [confidentialKeywords, setConfidentialKeywords] = useState(['프로젝트X', '매출현황', '보안코드']);
+  const [securityLogs, setSecurityLogs] = useState([
+    { id: 1, time: '2026-03-23 14:00', input: '프로젝트X의 기밀을 알려줘', status: '위험', type: '기밀 키워드' },
+    { id: 2, time: '2026-03-23 15:20', input: '제 전화번호는 010-1234-5678 입니다.', status: '주의', type: '개인정보(PII)' },
+  ]);
+
+  const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+
+  // --- 보안 탐지 로직 (PII 및 키워드) ---
+  const scanForThreats = (text) => {
+    let threats = [];
+    // 1. PII 탐지 (전화번호, 이메일 등 정규식)
+    const phoneRegex = /\d{2,3}-\d{3,4}-\d{4}/;
+    const emailRegex = /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/;
+    
+    if (phoneRegex.test(text)) threats.push({ type: '개인정보(전화번호)', status: '주의' });
+    if (emailRegex.test(text)) threats.push({ type: '개인정보(이메일)', status: '주의' });
+
+    // 2. 기밀 키워드 탐지
+    confidentialKeywords.forEach(kw => {
+      if (text.includes(kw)) threats.push({ type: `기밀 키워드(${kw})`, status: '위험' });
+    });
+
+    return threats;
+  };
 
   const handleAnalyze = async () => {
-    if (!input.trim()) return alert("프롬프트를 입력해주세요.");
+    if (!input.trim()) return;
     
     setGeminiResponse({ text: '', loading: true });
     setGuardianLog({ text: '', loading: true });
 
+    // 실시간 보안 스캔 실행
+    const detectedThreats = scanForThreats(input);
+    
+    // 관리자 로그에 저장 (시뮬레이션)
+    if (detectedThreats.length > 0) {
+      const newLog = {
+        id: Date.now(),
+        time: new Date().toLocaleString(),
+        input: input,
+        status: detectedThreats[0].status,
+        type: detectedThreats.map(t => t.type).join(', ')
+      };
+      setSecurityLogs([newLog, ...securityLogs]);
+    }
+
     try {
-      // 1. Gemini API 호출
       const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${GEMINI_API_KEY}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ contents: [{ parts: [{ text: input }] }] })
       });
-      
       const data = await res.json();
-      const text = data.candidates[0].content.parts[0].text;
-      
-      setGeminiResponse({ text, loading: false });
+      setGeminiResponse({ text: data.candidates[0].content.parts[0].text, loading: false });
 
-      // 2. 가디언 보안 분석 시뮬레이션 (제품의 핵심 기능처럼 보임)
-      setTimeout(() => {
-        const securityScore = Math.floor(Math.random() * 20) + 80; // 80~100점 사이 랜덤
-        setGuardianLog({ 
-          text: `[보안 점수: ${securityScore}/100]\n\n• PII(개인정보): 감지되지 않음\n• 프롬프트 인젝션: 위험 낮음\n• 유해 콘텐츠: 필터링 완료\n\n결론: 안전한 응답입니다. 가디언 에이전트가 실시간 모니터링 중입니다.`, 
-          loading: false 
-        });
-      }, 800);
-
+      // 보안 분석창 결과 표시
+      setGuardianLog({ 
+        text: detectedThreats.length > 0 
+          ? `⚠️ 위협 감지됨!\n\n${detectedThreats.map(t => `[${t.status}] ${t.type}`).join('\n')}\n\n시스템 보호를 위해 해당 요청을 로그에 기록했습니다.`
+          : `✅ 안전함\n\n특이사항 없음. 실시간 감시 중.`,
+        loading: false 
+      });
     } catch (error) {
-      setGeminiResponse({ text: "연결 실패: API 키를 확인하거나 잠시 후 다시 시도하세요.", loading: false });
-      setGuardianLog({ text: "분석 중단됨", loading: false });
+      setGeminiResponse({ text: "연결 실패", loading: false });
     }
   };
 
+  // --- 관리자 페이지 컴포넌트 ---
+  const AdminPage = () => (
+    <div className="animate-in fade-in duration-500">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+          <p className="text-slate-500 text-sm">총 탐지 건수</p>
+          <p className="text-3xl font-bold text-indigo-400">{securityLogs.length}건</p>
+        </div>
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+          <p className="text-slate-500 text-sm">위험 키워드 수</p>
+          <p className="text-3xl font-bold text-red-400">{confidentialKeywords.length}개</p>
+        </div>
+        <div className="bg-slate-900 p-6 rounded-2xl border border-slate-800">
+          <p className="text-slate-500 text-sm">시스템 상태</p>
+          <p className="text-3xl font-bold text-emerald-400">정상</p>
+        </div>
+      </div>
+
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden shadow-2xl">
+        <div className="p-6 border-b border-slate-800 flex justify-between items-center">
+          <h3 className="font-bold text-xl">실시간 위협 탐지 로그</h3>
+        </div>
+        <table className="w-full text-left">
+          <thead className="bg-slate-800/50 text-slate-400 text-xs uppercase">
+            <tr>
+              <th className="p-4">시간</th>
+              <th className="p-4">입력 내용</th>
+              <th className="p-4">위험 유형</th>
+              <th className="p-4">상태</th>
+            </tr>
+          </thead>
+          <tbody className="text-sm divide-y divide-slate-800">
+            {securityLogs.map(log => (
+              <tr key={log.id} className="hover:bg-slate-800/30 transition">
+                <td className="p-4 text-slate-500">{log.time}</td>
+                <td className="p-4 truncate max-w-xs">{log.input}</td>
+                <td className="p-4 text-indigo-300 font-mono">{log.type}</td>
+                <td className="p-4">
+                  <span className={`px-2 py-1 rounded-full text-xs font-bold ${log.status === '위험' ? 'bg-red-900/40 text-red-400' : 'bg-yellow-900/40 text-yellow-400'}`}>
+                    {log.status}
+                  </span>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+
   return (
     <div className="min-h-screen bg-slate-950 text-white font-sans">
-      {/* 상단바 */}
-      <nav className="p-4 flex justify-between items-center border-b border-slate-800 bg-slate-900/50 sticky top-0 z-10 backdrop-blur-md">
-        <h1 className="text-xl font-bold bg-gradient-to-r from-blue-400 to-indigo-400 bg-clip-text text-transparent">
-          Guardian Agent <span className="text-slate-500 text-sm font-normal">v1.0</span>
-        </h1>
-        <div className="flex items-center gap-2">
-          <span className="h-2 w-2 bg-emerald-500 rounded-full animate-pulse"></span>
-          <span className="text-xs text-slate-400 font-mono">SYSTEM READY</span>
-        </div>
+      <nav className="p-4 flex justify-between items-center border-b border-slate-800 bg-slate-900/50 sticky top-0 z-20 backdrop-blur-md">
+        <h1 className="text-xl font-bold text-indigo-400">Guardian Agent Admin</h1>
+        <button 
+          onClick={() => setIsAdmin(!isAdmin)}
+          className="bg-slate-800 hover:bg-slate-700 px-4 py-2 rounded-lg text-sm font-semibold transition"
+        >
+          {isAdmin ? "사용자 모드로 전환" : "관리자 대시보드"}
+        </button>
       </nav>
 
       <main className="max-w-7xl mx-auto p-6">
-        {/* 입력창 섹션 */}
-        <section className="mb-10">
-          <div className="bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl">
-            <h3 className="text-xs font-bold mb-3 text-indigo-400 uppercase tracking-widest">Input Prompt</h3>
-            <textarea 
-              className="w-full h-32 bg-slate-950 border border-slate-800 rounded-2xl p-5 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-200 transition-all placeholder:text-slate-700"
-              placeholder="Gemini에게 보낼 내용을 입력하세요. 가디언이 실시간으로 감시합니다."
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-            />
-            <button 
-              onClick={handleAnalyze}
-              disabled={geminiResponse.loading}
-              className="w-full py-4 rounded-2xl font-bold text-lg bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-900/20 transition-all active:scale-[0.98]"
-            >
-              {geminiResponse.loading ? '분석 및 생성 중...' : '가디언 보호 모드로 질문하기'}
-            </button>
-          </div>
-        </section>
+        {isAdmin ? (
+          <AdminPage />
+        ) : (
+          <div className="animate-in slide-in-from-bottom-4 duration-500">
+            {/* 기존의 사용자 UI (handleAnalyze 사용) */}
+            <section className="mb-10 bg-slate-900 border border-slate-800 p-6 rounded-3xl shadow-2xl">
+              <h3 className="text-xs font-bold mb-3 text-indigo-400 uppercase tracking-widest">User Input</h3>
+              <textarea 
+                className="w-full h-32 bg-slate-950 border border-slate-800 rounded-2xl p-5 mb-4 focus:outline-none focus:ring-2 focus:ring-indigo-500 text-slate-200"
+                placeholder="질문을 입력하세요. 가디언이 개인정보와 기밀 키워드를 탐지합니다."
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+              />
+              <button onClick={handleAnalyze} className="w-full py-4 rounded-2xl font-bold text-lg bg-indigo-600 hover:bg-indigo-500 transition-all">
+                {geminiResponse.loading ? '보안 검사 중...' : '가디언 보호 모드로 질문하기'}
+              </button>
+            </section>
 
-        {/* 좌우 분할 결과창 */}
-        <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* 왼쪽: Gemini 실시간 응답 */}
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl overflow-hidden flex flex-col h-[550px] shadow-xl">
-            <div className="bg-slate-800/50 p-4 border-b border-slate-800 flex justify-between items-center">
-              <span className="font-bold text-blue-400 flex items-center gap-2">
-                <span className="h-2 w-2 bg-blue-400 rounded-full"></span> Gemini 1.5 Flash
-              </span>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1 text-slate-300 whitespace-pre-wrap leading-relaxed">
-              {geminiResponse.loading ? (
-                <div className="animate-pulse space-y-4">
-                  <div className="h-4 bg-slate-800 rounded w-3/4"></div>
-                  <div className="h-4 bg-slate-800 rounded w-full"></div>
-                  <div className="h-4 bg-slate-800 rounded w-5/6"></div>
+            <section className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div className="bg-slate-900 border border-slate-800 rounded-3xl h-[450px] overflow-hidden flex flex-col">
+                <div className="p-4 bg-slate-800/50 border-b border-slate-800 text-blue-400 font-bold">Gemini Response</div>
+                <div className="p-6 overflow-y-auto whitespace-pre-wrap flex-1 text-slate-300">
+                  {geminiResponse.loading ? "생성 중..." : geminiResponse.text}
                 </div>
-              ) : geminiResponse.text || <span className="text-slate-600 italic">사용자의 입력을 기다리고 있습니다.</span>}
-            </div>
-          </div>
-
-          {/* 오른쪽: 가디언 보안 로그 */}
-          <div className="bg-slate-950 border-2 border-indigo-900/30 rounded-3xl overflow-hidden flex flex-col h-[550px] shadow-2xl">
-            <div className="bg-indigo-950/20 p-4 border-b border-indigo-900/30 flex justify-between items-center">
-              <span className="font-bold text-indigo-400 flex items-center gap-2">
-                🛡️ Guardian Security Log
-              </span>
-            </div>
-            <div className="p-6 overflow-y-auto flex-1 font-mono text-sm text-indigo-200/80 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')]">
-              {guardianLog.loading ? (
-                <div className="space-y-2">
-                  <p className="animate-bounce">Scanning payload...</p>
-                  <p className="opacity-50 text-xs">Checking for prompt injection...</p>
+              </div>
+              <div className="bg-slate-950 border-2 border-indigo-900/30 rounded-3xl h-[450px] overflow-hidden flex flex-col">
+                <div className="p-4 bg-indigo-950/20 border-b border-indigo-900/30 text-indigo-400 font-bold">Security Analysis</div>
+                <div className="p-6 overflow-y-auto font-mono text-sm text-indigo-200/80 flex-1">
+                  {guardianLog.loading ? "Analyzing..." : guardianLog.text}
                 </div>
-              ) : guardianLog.text || <span className="text-slate-700 italic">보안 위협 스캔 준비 완료.</span>}
-            </div>
+              </div>
+            </section>
           </div>
-        </section>
+        )}
       </main>
-
-      <footer className="mt-12 py-8 text-center text-slate-600 border-t border-slate-900 text-sm">
-        <p>© 2026 Guardian AI Project. 모든 통신은 종단간 암호화되어 보호됩니다.</p>
-      </footer>
     </div>
   );
 };
 
-export default GuardianLanding;
+export default App;
