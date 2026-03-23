@@ -13,7 +13,7 @@ const App = () => {
     { id: 2, time: '2026-03-23 15:20', input: '제 전화번호는 010-1234-5678 입니다.', status: '주의', type: '개인정보(PII)' },
   ]);
 
-  const GEMINI_API_KEY = process.env.REACT_APP_GEMINI_API_KEY;
+  const GEMINI_API_KEY = process.env.AIzaSyD-h-AK5Ldl4l4sGna806mhW0woVDiwS0s;
 
   // --- 보안 탐지 로직 (PII 및 키워드) ---
   const scanForThreats = (text) => {
